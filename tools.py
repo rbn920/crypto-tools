@@ -25,17 +25,17 @@ def get_asset(symbol, date, n):
 #     return web.DataReader(asset, 'yahoo', start, end)['Close']
 
 
-def sma(df, column="Close", period=20):
+def sma(df, column="close", period=20):
     sma = df[column].rolling(window=period, min_periods=period - 1).mean()
     return df.join(sma.to_frame('SMA'))
 
 
-def ema(df, column='Close', period=20):
+def ema(df, column='close', period=20):
     ema = df[column].ewm(span=period, min_periods=period - 1).mean()
-    return df.join(ema.to_frame('EMA'))
+    ema.name = 'EMA'
+    return ema
 
-
-def rsi(df, column="Close", period=14):
+def rsi(df, column="close", period=14):
     # wilder's RSI
 
     delta = df[column].diff()
@@ -83,13 +83,16 @@ def rsi(df, column="Close", period=14):
 # df.plot(y=['Close'])
 # df.plot(y=['RSI'])
 
-data = get_asset('BTC', '2016-01-02', 10)
-output = 'Date: {} | Close: {:.2f} | High: {:.2f} | Low: {:.2f} | Open: {:.2f}'
-for item in data:
-    date = datetime.datetime.fromtimestamp(item['time']).strftime('%Y-%m-%d')
-    p = output.format(date, item['close'], item['high'], item['low'],
-                      item['open'])
-    print(p)
+data = get_asset('BTC', '2018-02-19', 100)
+# output = 'Date: {} | Close: {:.2f} | High: {:.2f} | Low: {:.2f} | Open: {:.2f}'
+# for item in data:
+#     date = datetime.datetime.fromtimestamp(item['time']).strftime('%Y-%m-%d')
+#     p = output.format(date, item['close'], item['high'], item['low'],
+#                       item['open'])
+#     print(p)
 
 df = pd.DataFrame(data)
+df = df.join(ema(df))
 print(df)
+df.plot()
+plt.show()
