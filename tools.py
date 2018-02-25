@@ -7,6 +7,31 @@ import matplotlib.pyplot as plt
 import requests
 
 
+class Cryptocompare:
+    def __init__(self):
+        self.base_url = 'https://min-api.cryptocompare.com/data/'
+        self.base_url_old = 'https://www.cryptocompare.com/api/data/'
+
+    def coin_list(self):
+        url = '{}coinlist'.format(self.base_url_old)
+        r = requests.get(url)
+
+        return r.json()['Data']
+
+    def daily(self, symbol, date, n):
+        url = '{}histoday'.format(self.base_url)
+        pattern = '%Y-%m-%d'
+        toTs = int(time.mktime(time.strptime(date, pattern)))
+        payload = {'fsym': symbol,
+                   'tsym': 'USD',
+                   'limit': n - 1,
+                   'toTs': toTs
+                   }
+        r = requests.get(url, params=payload)
+
+        return r.json()['Data']
+
+
 def get_asset(symbol, date, n):
     url = 'https://min-api.cryptocompare.com/data/histoday'
     pattern = '%Y-%m-%d'
@@ -51,19 +76,19 @@ def rsi(df, column="close", period=14):
     return rsi
 
 
-data = get_asset('BTC', '2018-02-19', 100)
-# output = 'Date: {} | Close: {:.2f} | High: {:.2f} | Low: {:.2f} \
-#           | Open: {:.2f}'
-# for item in data:
-#     date = datetime.datetime.fromtimestamp(item['time']).strftime('%Y-%m-%d')
-#     p = output.format(date, item['close'], item['high'], item['low'],
-#                       item['open'])
-#     print(p)
-
-df = pd.DataFrame(data)
-# df = df.join(sma(df))
-# plt.plot(df['SMA_20'])
-# plt.plot(df['close'])
-rsi = rsi(df)
-plt.plot(rsi)
-plt.show()
+# data = get_asset('BTC', '2018-02-19', 100)
+# # output = 'Date: {} | Close: {:.2f} | High: {:.2f} | Low: {:.2f} \
+# #           | Open: {:.2f}'
+# # for item in data:
+# #     date = datetime.datetime.fromtimestamp(item['time']).strftime('%Y-%m-%d')
+# #     p = output.format(date, item['close'], item['high'], item['low'],
+# #                       item['open'])
+# #     print(p)
+# 
+# df = pd.DataFrame(data)
+# # df = df.join(sma(df))
+# # plt.plot(df['SMA_20'])
+# # plt.plot(df['close'])
+# rsi = rsi(df)
+# plt.plot(rsi)
+# plt.show()
