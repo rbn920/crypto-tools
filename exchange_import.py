@@ -6,156 +6,189 @@ import itertools
 # import sqlite3
 
 
-def symbols():
-    cc = Cryptocompare()
-    coins = cc.coin_list()
-    symbols = []
-    for coin in coins:
-        symbols.append(coins[coin]['Symbol'])
+class Exchange():
+    def __init__(self, file_name):
+        self.df = None
+        self.file_name = file_name
+        self._load_file()
+        self._symbols()
 
-    return symbols
+    def _load_file(self):
+        fn = r'data/{}'.format(self.file_name)
+        self.data = pd.read_excel(fn)
+
+    def _symbols(self):
+        cc = Cryptocompare()
+        coins = cc.coin_list()
+        symbols = []
+        for coin in coins:
+            symbols.append(coins[coin]['Symbol'])
+
+        symbols.append('USD')
+        self.symbols = symbols
+
+    def _find_pair(self, market):
+        matches = []
+        for x in self.symbols:
+            if x in market and x not in matches:
+                matches.append(x)
+
+        pairs = list(itertools.combinations(matches, 2))
+        for pair in pairs:
+            if (pair[0] + pair[1]) == market:
+                base = pair[0]
+                quote = pair[1]
+                return (base, quote)
+
+            elif (pair[1] + pair[0]) == market:
+                base = pair[1]
+                quote = pair[0]
+                return (base, quote)
+
+        return ('Error', 'Error')
+
+    def _timestamp(self):
+        return (self.data['Date'] - dt.datetime(1970, 1, 1)).dt.total_seconds()
 
 
-def find_pair(market, symbols):
-    matches = []
-    for x in symbols:
-        if x in market and x not in matches:
-            matches.append(x)
+class Gemini(Exchange):
+    def __init__(self, file_name):
+        super().__init__(file_name)
+        self._read_file()
+        self._format_data()
 
-    pairs = list(itertools.combinations(matches, 2))
-    print(matches)
-    print(pairs)
-    for pair in pairs:
-        if (pair[0] + pair[1]) == market:
-            return (pair[0], pair[1])
-        elif (pair[1] + pair[0]) == market:
-            return (pair[1], pair[0])
+    def _read_file(self):
+        keep = ['Date',
+                'Type',
+                'Symbol',
+                'USD Amount',
+                'Trading Fee (USD)',
+                'BTC Amount',
+                'ETH Amount']
+        data = self.data[keep]
+        self.data = data[:-1]
 
-    return ('error', 'error')
+    def _format_data(self):
+        self.data['timestamp'] = self._timestamp()
+        self.data['type'] = np.where(self.data['Type'] == 'Credit',
+                                     'deposit',
+                                     np.where(self.data['Type'] == 'Debit',
+                                              'withdrawl',
+                                              'trade'))
 
+        buy = []
+        sell = []
+        for _, row in self.data.iterrows():
+            base, quote = self._find_pair(row['Symbol'])
+            if row['type'] == 'deposit':
+                buy.append(row['Symbol'])
+                sell.append(None)
 
-def gemini():
-    df = pd.read_excel(r'data/transaction_history.xlsx')
-    keep = ['Date',
-            'Type',
-            'Symbol',
-            'USD Amount',
-            'Trading Fee (USD)',
-            'BTC Amount',
-            'ETH Amount'
-            ]
-    df = df[keep]
-    df = df[:-1]
-    df['timestamp'] = (df['Date'] - dt.datetime(1970, 1, 1)).dt.total_seconds()
-    df['type'] = np.where(df['Type'] == 'Credit',
-                          'deposit',
-                          np.where(df['Type'] == 'Debit',
-                                   'withdrawl',
-                                   'trade'))
-
-    buy = []
-    sell = []
-    for _, row in df.iterrows():
-        if row['type'] == 'deposit':
-            buy.append(row['Symbol'])
-            sell.append(np.nan)
-
-        elif row['type'] == 'withdrawl':
-            buy.append(np.nan)
-            sell.append(row['Symbol'])
-
-        else:
-            if row['Type'] == 'Buy':
-                buy.append(row['Symbol'][:3])
-                sell.append(row['Symbol'][-3:])
+            elif row['type'] == 'withdrawl':
+                buy.append(None)
+                sell.append(row['Symbol'])
 
             else:
-                buy.append(row['Symbol'][-3:])
-                sell.append(row['Symbol'][:3])
+                if row['Type'] == 'Buy':
+                    buy.append(base)
+                    sell.append(quote)
 
-    df['buy_currency'] = buy
-    df['sell_currency'] = sell
+                else:
+                    buy.append(quote)
+                    sell.append(base)
 
-    df['buy_amount'] = np.where(df['buy_currency'] == 'USD',
-                                df['USD Amount'],
-                                np.where(df['buy_currency'] == 'BTC',
-                                         df['BTC Amount'],
-                                         np.where(df['buy_currency'] == 'ETH',
-                                                  df['ETH Amount'],
-                                                  np.nan)))
+        self.data['buy_currency'] = buy
+        self.data['sell_currency'] = sell
 
-    df['sell_amount'] = np.where(df['sell_currency'] == 'USD',
-                                 df['USD Amount'],
-                                 np.where(df['sell_currency'] == 'BTC',
-                                          df['BTC Amount'],
-                                          np.where(df['sell_currency'] == 'ETH',
-                                                   df['ETH Amount'],
-                                                   np.nan)))
+        self.data['buy_amount'] = np.where(self.data['buy_currency'] == 'USD',
+                                           self.data['USD Amount'],
+                                           np.where(self.data['buy_currency'] == 'BTC',
+                                                    self.data['BTC Amount'],
+                                                    np.where(self.data['buy_currency']
+                                                             == 'ETH',
+                                                             self.data['ETH Amount'],
+                                                             np.nan)))
 
-    df = df.rename(columns={'Date': 'datetime', 'Trading Fee (USD)': 'fee_amount'})
-    df['sell_amount'] = df['sell_amount'].abs()
-    df['fee_amount'] = df['fee_amount'].abs()
-    df['fee_currency'] = 'USD'
-    df['exchange'] = 'gemini'
+        self.data['sell_amount'] = np.where(self.data['sell_currency'] == 'USD',
+                                            self.data['USD Amount'],
+                                            np.where(self.data['sell_currency'] == 'BTC',
+                                                     self.data['BTC Amount'],
+                                                     np.where(self.data['sell_currency']
+                                                              == 'ETH',
+                                                              self.data['ETH Amount'],
+                                                              np.nan)))
 
-    out = ['datetime',
-           'timestamp',
-           'type',
-           'buy_amount',
-           'buy_currency',
-           'sell_amount',
-           'sell_currency',
-           'fee_amount',
-           'fee_currency',
-           'exchange'
-           ]
+        self.data = self.data.rename(columns={'Date': 'datetime',
+                                              'Trading Fee (USD)': 'fee_amount'})
+        self.data['sell_amount'] = self.data['sell_amount'].abs()
+        self.data['fee_amount'] = self.data['fee_amount'].abs()
+        self.data['fee_currency'] = 'USD'
+        self.data['exchange'] = 'gemini'
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
 
-    out_frame = df[out]
-    # out_frame = out_frame.where(df.notnull(), None)
-
-    return out_frame
+        self.out_frame = self.data[out]
 
 
-def binance():
-    df = pd.read_excel(r'data/TradeHistory.xlsx')
-    df['timestamp'] = (df['Date'] - dt.datetime(1970, 1, 1)).dt.total_seconds()
-    df['type'] = 'trade'
-    buy = []
-    sell = []
-    for _, row in df.iterrows():
-        if row['Type'] == 'Buy':
-            buy.append(row['Market'][:3])
-            sell.append(row['Market'][-3:])
+class Binance(Exchange):
+    def __init__(self, file_name):
+        super().__init__(file_name)
+        self._read_file()
+        self._format_data()
 
-        else:
-            buy.append(row['Market'][-3:])
-            sell.append(row['Market'][:3])
+    def _read_file(self):
+        self.data['Date'] = pd.to_datetime(self.data['Date'])
+        self.data = self.data.rename(columns={'Market': 'Symbol'})
 
-    df['buy_currency'] = buy
-    df['sell_currency'] = sell
+    def _format_data(self):
+        self.data['timestamp'] = self._timestamp()
+        self.data['type'] = 'trade'
+        buy = []
+        sell = []
+        for _, row in self.data.iterrows():
+            base, quote = self._find_pair(row['Symbol'])
+            if row['Type'] == 'BUY':
+                buy.append(base)
+                sell.append(quote)
 
-    # df['buy_amount'] =
-    # df['sell_amount'] =
-    df = df.rename(columns={'Date': 'datetime', 'Fee': 'fee_amount', 'Fee Coin':
-                            'fee_currency'})
-    df['exchange'] = 'binance'
+            else:
+                buy.append(quote)
+                sell.append(base)
 
-    out = ['datetime',
-           'timestamp',
-           'type',
-           'buy_amount',
-           'buy_currency',
-           'sell_amount',
-           'sell_currency',
-           'fee_amount',
-           'fee_currency',
-           'exchange'
-           ]
+        self.data['buy_currency'] = buy
+        self.data['sell_currency'] = sell
+        self.data['buy_amount'] = np.where(self.data['Type'] == 'BUY',
+                                           self.data['Amount'],
+                                           self.data['Total'])
 
-    out_frame = df[out]
-    # out_frame = out_frame.where(df.notnull(), None)
+        self.data['sell_amount'] = np.where(self.data['Type'] == 'BUY',
+                                            self.data['Total'],
+                                            self.data['Amount'])
 
-    return out_frame
+        self.data = self.data.rename(columns={'Date': 'datetime',
+                                              'Fee': 'fee_amount',
+                                              'Fee Coin': 'fee_currency'})
+        self.data['exchange'] = 'binance'
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
+
+        self.out_frame = self.data[out]
 
 
 # db = sqlite3.connect('data/crypto.db')
