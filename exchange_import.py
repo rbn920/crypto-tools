@@ -10,12 +10,16 @@ class Exchange():
     def __init__(self, file_name):
         self.df = None
         self.file_name = file_name
-        self._load_file()
+        # self._load_file()
         self._symbols()
 
-    def _load_file(self):
+    def _load_xl(self):
         fn = r'data/{}'.format(self.file_name)
         self.data = pd.read_excel(fn)
+
+    def _load_csv(self):
+        fn = r'data/{}'.format(self.file_name)
+        self.data = pd.read_csv(fn)
 
     def _symbols(self):
         cc = Cryptocompare()
@@ -54,6 +58,7 @@ class Exchange():
 class Gemini(Exchange):
     def __init__(self, file_name):
         super().__init__(file_name)
+        self._load_xl()
         self._read_file()
         self._format_data()
 
@@ -139,43 +144,76 @@ class Gemini(Exchange):
 
 
 class Binance(Exchange):
-    def __init__(self, file_name):
+    def __init__(self, file_name, history='trade'):
         super().__init__(file_name)
+        self.history = history
+        self._load_xl()
+        # if history == 'trade':
+        #     self._load_xl()
+        # else:
+        #     self._load_csv()
+
         self._read_file()
         self._format_data()
 
     def _read_file(self):
         self.data['Date'] = pd.to_datetime(self.data['Date'])
-        self.data = self.data.rename(columns={'Market': 'Symbol'})
+        if 'Market' in self.data:
+            self.data = self.data.rename(columns={'Market': 'Symbol'})
+
+        else:
+            self.data = self.data[self.data['Status'] != 'Cancelled']
+            keep = ['Date',
+                    'Coin',
+                    'Amount']
+            self.data = self.data[keep]
 
     def _format_data(self):
         self.data['timestamp'] = self._timestamp()
-        self.data['type'] = 'trade'
-        buy = []
-        sell = []
-        for _, row in self.data.iterrows():
-            base, quote = self._find_pair(row['Symbol'])
-            if row['Type'] == 'BUY':
-                buy.append(base)
-                sell.append(quote)
+        self.data['type'] = self.history
+        if self.history == 'trade':
+            buy = []
+            sell = []
+            for _, row in self.data.iterrows():
+                base, quote = self._find_pair(row['Symbol'])
+                if row['Type'] == 'BUY':
+                    buy.append(base)
+                    sell.append(quote)
 
-            else:
-                buy.append(quote)
-                sell.append(base)
+                else:
+                    buy.append(quote)
+                    sell.append(base)
 
-        self.data['buy_currency'] = buy
-        self.data['sell_currency'] = sell
-        self.data['buy_amount'] = np.where(self.data['Type'] == 'BUY',
-                                           self.data['Amount'],
-                                           self.data['Total'])
+            self.data['buy_currency'] = buy
+            self.data['sell_currency'] = sell
+            self.data['buy_amount'] = np.where(self.data['Type'] == 'BUY',
+                                               self.data['Amount'],
+                                               self.data['Total'])
 
-        self.data['sell_amount'] = np.where(self.data['Type'] == 'BUY',
-                                            self.data['Total'],
-                                            self.data['Amount'])
+            self.data['sell_amount'] = np.where(self.data['Type'] == 'BUY',
+                                                self.data['Total'],
+                                                self.data['Amount'])
 
-        self.data = self.data.rename(columns={'Date': 'datetime',
-                                              'Fee': 'fee_amount',
-                                              'Fee Coin': 'fee_currency'})
+            self.data = self.data.rename(columns={'Fee': 'fee_amount',
+                                                  'Fee Coin': 'fee_currency'})
+
+        elif self.history == 'deposit':
+            self.data = self.data.rename(columns={'Coin': 'buy_currency',
+                                                  'Amount': 'buy_amount'})
+            self.data['sell_currency'] = np.nan
+            self.data['sell_amount'] = np.nan
+            self.data['fee_currency'] = np.nan
+            self.data['fee_amount'] = np.nan
+
+        else:
+            self.data = self.data.rename(columns={'Coin': 'sell_currency',
+                                                  'Amount': 'sell_amount'})
+            self.data['buy_currency'] = np.nan
+            self.data['buy_amount'] = np.nan
+            self.data['fee_currency'] = np.nan
+            self.data['fee_amount'] = np.nan
+
+        self.data = self.data.rename(columns={'Date': 'datetime'})
         self.data['exchange'] = 'binance'
         out = ['datetime',
                'timestamp',
