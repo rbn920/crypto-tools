@@ -229,5 +229,73 @@ class Binance(Exchange):
         self.out_frame = self.data[out]
 
 
+class Kucoin(Exchange):
+    def __init__(self, file_name, history='trade'):
+        super().__init__(file_name)
+        self.history = history
+        self._load_csv()
+        self._format_data()
+
+    def _format_data(self):
+        if self.history == 'trade':
+            self.data['symbol'] = self.data['symbol'].str.replace('/', '')
+            self.data['type'] = self.history
+            buy = []
+            sell = []
+            for _, row in self.data.iterrows():
+                base, quote = self._find_pair(row['symbol'])
+                if row['side'] == 'buy':
+                    buy.append(base)
+                    sell.append(quote)
+
+                else:
+                    buy.append(quote)
+                    sell.append(base)
+
+            self.data['buy_currency'] = buy
+            self.data['sell_currency'] = sell
+            self.data['buy_amount'] = np.where(self.data['side'] == 'buy',
+                                               self.data['amount'],
+                                               self.data['cost'])
+
+            self.data['sell_amount'] = np.where(self.data['side'] == 'buy',
+                                                self.data['cost'],
+                                                self.data['amount'])
+
+        elif self.history == 'transfer':
+            self.data['buy_currency'] = np.where(self.data['side'] == 'DEPOSIT',
+                                                 self.data['symbol'],
+                                                 np.nan)
+            self.data['sell_currency'] = np.where(self.data['side'] == 'WITHDRAWAL',
+                                                  self.data['symbol'],
+                                                  np.nan)
+            self.data['buy_amount'] = np.where(self.data['side'] == 'DEPOSIT',
+                                               self.data['amount'],
+                                               np.nan)
+            self.data['sell_amount'] = np.where(self.data['side'] == 'WITHDRAWAL',
+                                                self.data['amount'],
+                                                np.nan)
+
+            self.data['type'] = np.where(self.data['side'] == 'DEPOSIT',
+                                         'deposit',
+                                         'withdrawal')
+
+        self.data = self.data.rename(columns={'fee.cost': 'fee_amount',
+                                              'fee.currency': 'fee_currency'})
+        self.data['exchange'] = 'kucoin'
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
+
+        self.out_frame = self.data[out]
+
+
 # db = sqlite3.connect('data/crypto.db')
 # out_frame.to_sql('transactions', db, if_exists='append', index=False)
