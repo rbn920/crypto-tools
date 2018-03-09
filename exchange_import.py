@@ -297,5 +297,21 @@ class Kucoin(Exchange):
         self.out_frame = self.data[out]
 
 
+class Cryptopia(Exchange):
+    pass
+
+
+class Hitbtc(Exchange):
+    pass
+
+
+class Kraken(Exchange):
+    pass
+
+
+class Poloniex(Exchange):
+    pass
+
+
 # db = sqlite3.connect('data/crypto.db')
 # out_frame.to_sql('transactions', db, if_exists='append', index=False)
