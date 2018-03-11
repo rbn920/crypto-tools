@@ -298,7 +298,13 @@ class Kucoin(Exchange):
 
 
 class Cryptopia(Exchange):
-    pass
+    def __init__(self, file_name, history='trade'):
+        super().__init__(file_name)
+        self.history = history
+        self._load_csv()
+
+    def _format_datatime(self):
+
 
 
 class Hitbtc(Exchange):
