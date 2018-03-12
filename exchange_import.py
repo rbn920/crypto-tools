@@ -298,7 +298,74 @@ class Kucoin(Exchange):
 
 
 class Cryptopia(Exchange):
-    pass
+    def __init__(self, file_name, history='trade'):
+        super().__init__(file_name)
+        self.history = history
+        self._load_csv()
+        self._format_data()
+
+    def _format_data(self):
+        self.data['Date'] = pd.to_datetime(self.data['Timestamp'],
+                                               format='%d/%m/%Y %I:%M:%S %p')
+        self.data['timestamp'] = self._timestamp()
+        self.data['exchange'] = 'cryptopia'
+        self.data['type'] = self.history
+        if self.history == 'trade':
+            self.data['symbol'] = self.data['Market'].str.replace('/', '')
+            buy = []
+            sell = []
+            for _, row in self.data.iterrows():
+                base, quote = self._find_pair(row['symbol'])
+                if row['Type'] == 'Buy':
+                    buy.append(base)
+                    sell.append(quote)
+
+                else:
+                    buy.append(quote)
+                    sell.append(base)
+
+            self.data['buy_currency'] = buy
+            self.data['sell_currency'] = sell
+            self.data['buy_amount'] = np.where(self.data['Type'] == 'Buy',
+                                               self.data['Amount'],
+                                               self.data['Total'])
+
+            self.data['sell_amount'] = np.where(self.data['Type'] == 'Buy',
+                                                self.data['Total'],
+                                                self.data['Amount'])
+
+            self.data = self.data.rename(columns={'Fee': 'fee_amount'})
+            self.data['fee_currency'] = self.data['buy_currency']
+
+        elif self.history == 'deposit':
+            self.data = self.data.rename(columns={'Currency': 'buy_currency',
+                                                  'Amount': 'buy_amount'})
+            self.data['sell_currency'] = np.nan
+            self.data['sell_amount'] = np.nan
+            self.data['fee_currency'] = np.nan
+            self.data['fee_amount'] = np.nan
+
+        else:
+            self.data = self.data.rename(columns={'Currency': 'sell_currency',
+                                                  'Amount': 'sell_amount',
+                                                  'Fee': 'fee_amount'})
+            self.data['buy_currency'] = np.nan
+            self.data['buy_amount'] = np.nan
+            self.data['fee_currency'] = self.data['sell_currency']
+
+        self.data = self.data.rename(columns={'Date': 'datetime'})
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
+
+        self.out_frame = self.data[out]
 
 
 class Hitbtc(Exchange):
