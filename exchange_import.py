@@ -306,7 +306,7 @@ class Cryptopia(Exchange):
 
     def _format_data(self):
         self.data['Date'] = pd.to_datetime(self.data['Timestamp'],
-                                               format='%d/%m/%Y %I:%M:%S %p')
+                                           format='%d/%m/%Y %I:%M:%S %p')
         self.data['timestamp'] = self._timestamp()
         self.data['exchange'] = 'cryptopia'
         self.data['type'] = self.history
