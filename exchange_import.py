@@ -6,6 +6,9 @@ import itertools
 # import sqlite3
 
 
+'''Still a lot of repeated code. Preformat with all lowercase and absolute values.'''
+
+
 class Exchange():
     def __init__(self, file_name):
         self.df = None
@@ -369,7 +372,78 @@ class Cryptopia(Exchange):
 
 
 class Hitbtc(Exchange):
-    pass
+    def __init__(self, file_name, history='trade'):
+        super().__init__(file_name)
+        self.history = history
+        self._load_csv()
+        self._format_data()
+
+    def _format_data(self):
+        self.data['Date'] = pd.to_datetime(self.data['Date (UTC)'],
+                                           format='%Y-%m-%d %H:%M:%S')
+        self.data['timestamp'] = self._timestamp()
+        self.data['exchange'] = 'hitbtc'
+        self.data['type'] = self.history
+        if self.history == 'trade':
+            self.data['symbol'] = self.data['Instrument'].str.replace('/', '')
+            buy = []
+            sell = []
+            for _, row in self.data.iterrows():
+                base, quote = self._find_pair(row['symbol'])
+                if row['Side'] == 'buy':
+                    buy.append(base)
+                    sell.append(quote)
+
+                else:
+                    buy.append(quote)
+                    sell.append(base)
+
+            self.data['buy_currency'] = buy
+            self.data['sell_currency'] = sell
+            self.data['buy_amount'] = np.where(self.data['Side'] == 'buy',
+                                               self.data['Quantity'],
+                                               self.data['Total'])
+
+            self.data['sell_amount'] = np.where(self.data['Side'] == 'buy',
+                                                self.data['Total'],
+                                                self.data['Quantity'])
+
+            self.data = self.data.rename(columns={'Fee': 'fee_amount',
+                                                  'Side': 'side'})
+            self.data['fee_currency'] = self.data['sell_currency']
+
+        elif self.history == 'transfer':
+            self.data = self.data[~self.data['Type'].str.contains('Transfer')]
+            self.data = self.data.rename(columns={'Unnamed: 6': 'symbol'})
+            self.data['buy_currency'] = np.where(self.data['Type'] == 'Deposit',
+                                                 self.data['symbol'],
+                                                 np.nan)
+            self.data['sell_currency'] = np.where(self.data['Type'] == 'Withdrawal',
+                                                  self.data['symbol'],
+                                                  np.nan)
+            self.data['buy_amount'] = np.where(self.data['Type'] == 'Deposit',
+                                               self.data['Amount'],
+                                               np.nan)
+            self.data['sell_amount'] = np.where(self.data['Type'] == 'Withdrawal',
+                                                self.data['Amount'],
+                                                np.nan)
+            self.data['fee_currency'] = np.nan
+            self.data['fee_amount'] = np.nan
+
+        self.data = self.data.rename(columns={'Date': 'datetime',
+                                              'Type': 'type'})
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
+
+        self.out_frame = self.data[out]
 
 
 class Kraken(Exchange):
