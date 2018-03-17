@@ -451,8 +451,100 @@ class Kraken(Exchange):
 
 
 class Poloniex(Exchange):
-    pass
+    '''May need to add in borrowing history'''
+    def __init__(self, file_name, history='trade'):
+        super().__init__(file_name)
+        self.history = history
+        self._load_csv()
+        self._read_file()
+        self._format_data()
 
+    def _read_file(self):
+        self.data['Date'] = pd.to_datetime(self.data['Date'], format='%Y-%m-%d %H:%M:%S')
+        if 'Market' in self.data:
+            self.data = self.data.rename(columns={'Market': 'Symbol',
+                                                  'Type': 'Side'})
+            self.data['Symbol'] = self.data['Symbol'].str.replace('/', '')
+            self.data['Side'] = self.data['Side'].str.lower()
+            self.data['Fee'] = self.data['Fee'].str.strip('%')
+            self.data['Fee'] = pd.to_numeric(self.data['Fee']) / 100
+            self.data['Side'] = self.data['Side'].str.lower()
+            keep = ['Date', 'Symbol', 'Category', 'Side', 'Amount', 'Total', 'Fee',
+                    'Base Total Less Fee', 'Quote Total Less Fee']
+
+        else:
+            self.data = self.data[self.data['Status'].str.contains('COMPLETE')]
+            keep = ['Date', 'Currency', 'Amount']
+
+        self.data = self.data[keep]
+
+    def _format_data(self):
+        self.data['timestamp'] = self._timestamp()
+        if self.history == 'trade':
+            base_amount = 'Base Total Less Fee'
+            quote_amount = 'Quote Total Less Fee'
+            self.data['type'] = np.where(self.data['Category'] == 'Exchange',
+                                         'trade',
+                                         'margin trade')
+            buy = []
+            sell = []
+            for _, row in self.data.iterrows():
+                base, quote = self._find_pair(row['Symbol'])
+                if row['Side'] == 'buy':
+                    buy.append(base)
+                    sell.append(quote)
+
+                else:
+                    buy.append(quote)
+                    sell.append(base)
+
+            self.data['buy_currency'] = buy
+            self.data['sell_currency'] = sell
+            self.data['buy_amount'] = np.where(self.data['Side'] == 'buy',
+                                               self.data[quote_amount],
+                                               self.data[base_amount])
+
+            self.data['sell_amount'] = np.where(self.data['Side'] == 'buy',
+                                                self.data[base_amount].abs(),
+                                                self.data[quote_amount].abs())
+
+            self.data['fee_amount'] = np.where(self.data['Side'] == 'buy',
+                                               self.data['Amount'] * self.data['Fee'],
+                                               self.data['Total'] * self.data['Fee'])
+            self.data['fee_currency'] = self.data['buy_currency']
+
+        elif self.history == 'deposit':
+            self.data['type'] = self.history
+            self.data = self.data.rename(columns={'Currency': 'buy_currency',
+                                                  'Amount': 'buy_amount'})
+            self.data['sell_currency'] = np.nan
+            self.data['sell_amount'] = np.nan
+            self.data['fee_currency'] = np.nan
+            self.data['fee_amount'] = np.nan
+
+        else:
+            self.data['type'] = self.history
+            self.data = self.data.rename(columns={'Currency': 'sell_currency',
+                                                  'Amount': 'sell_amount'})
+            self.data['buy_currency'] = np.nan
+            self.data['buy_amount'] = np.nan
+            self.data['fee_currency'] = np.nan
+            self.data['fee_amount'] = np.nan
+
+        self.data = self.data.rename(columns={'Date': 'datetime'})
+        self.data['exchange'] = 'poloniex'
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
+
+        self.out_frame = self.data[out]
 
 # db = sqlite3.connect('data/crypto.db')
 # out_frame.to_sql('transactions', db, if_exists='append', index=False)
