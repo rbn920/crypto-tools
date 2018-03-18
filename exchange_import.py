@@ -447,7 +447,41 @@ class Hitbtc(Exchange):
 
 
 class Kraken(Exchange):
-    pass
+    def __init__(self, file_name, history='trade'):
+        super().__init__(file_name)
+        self.history = history
+        self._load_csv()
+        self.headers = {'pair': 'Symbol',
+                        'type': 'Side',
+                        'time': 'Date',
+                        'volume': 'Amount',
+                        'cost': 'Total',
+                        'fee': 'Fee'}
+        self._read_file()
+        self._format_data()
+
+    def _read_file(self):
+        if self.history == 'trade':
+            self.data = self.data.rename(columns=self.headers)
+            self.data['Symbol'] = self.data['Symbol'].str[1:]
+            self.data['Symbol'] = (self.data['Symbol'].str[:-4] +
+                                   self.data['Symbol'].str[-3:])
+            self.data['Symbol'] = self.data['Symbol'].str.replace('XBT', 'BTC')
+            keep = ['Date',
+                    'Symbol',
+                    'Side',
+                    'Amount',
+                    'Total',
+                    'Fee']
+
+        else:
+            self.data[(self.data['type'] == 'deposit') |
+                      (self.data['type'] == 'withdrawal')]
+            keep = ['Date', 'Currency', 'Amount']
+
+        self.data = self.data[keep]
+
+        self.data['Date'] = pd.to_datetime(self.data['Date'], format='%Y-%m-%d %H:%M:%S')
 
 
 class Poloniex(Exchange):
