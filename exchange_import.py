@@ -451,17 +451,18 @@ class Kraken(Exchange):
         super().__init__(file_name)
         self.history = history
         self._load_csv()
-        self.headers = {'pair': 'Symbol',
-                        'type': 'Side',
-                        'time': 'Date',
-                        'volume': 'Amount',
-                        'cost': 'Total',
+        self.headers = {'time': 'Date',
                         'fee': 'Fee'}
         self._read_file()
         self._format_data()
 
     def _read_file(self):
         if self.history == 'trade':
+            headers = {'pair': 'Symbol',
+                       'type': 'Side',
+                       'vol': 'Amount',
+                       'cost': 'Total'}
+            self.headers.update(headers)
             self.data = self.data.rename(columns=self.headers)
             self.data['Symbol'] = self.data['Symbol'].str[1:]
             self.data['Symbol'] = (self.data['Symbol'].str[:-4] +
@@ -475,13 +476,26 @@ class Kraken(Exchange):
                     'Fee']
 
         else:
-            self.data[(self.data['type'] == 'deposit') |
-                      (self.data['type'] == 'withdrawal')]
-            keep = ['Date', 'Currency', 'Amount']
+            headers = {'asset': 'Currency',
+                       'amount': 'Amount'}
+            self.headers.update(headers)
+            self.data = self.data.rename(columns=self.headers)
+            self.data = self.data[(self.data['type'] == 'deposit') |
+                                  (self.data['type'] == 'withdrawal')]
+            self.data['Currency'] = self.data['Currency'].str[1:]
+            self.data['Currency'] = self.data['Currency'].str.replace('XBT', 'BTC')
+            keep = ['Date',
+                    'Currency',
+                    'Amount',
+                    'Fee',
+                    'type']
 
         self.data = self.data[keep]
 
         self.data['Date'] = pd.to_datetime(self.data['Date'], format='%Y-%m-%d %H:%M:%S')
+
+    def _format_data(self):
+        pass
 
 
 class Poloniex(Exchange):
