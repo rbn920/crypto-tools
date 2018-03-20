@@ -461,7 +461,8 @@ class Kraken(Exchange):
             headers = {'pair': 'Symbol',
                        'type': 'Side',
                        'vol': 'Amount',
-                       'cost': 'Total'}
+                       'cost': 'Total',
+                       'margin': 'Margin'}
             self.headers.update(headers)
             self.data = self.data.rename(columns=self.headers)
             self.data['Symbol'] = self.data['Symbol'].str[1:]
@@ -473,29 +474,96 @@ class Kraken(Exchange):
                     'Side',
                     'Amount',
                     'Total',
-                    'Fee']
+                    'Fee',
+                    'Margin']
 
         else:
             headers = {'asset': 'Currency',
-                       'amount': 'Amount'}
+                       'amount': 'Amount',
+                       'type': 'Type'}
             self.headers.update(headers)
             self.data = self.data.rename(columns=self.headers)
-            self.data = self.data[(self.data['type'] == 'deposit') |
-                                  (self.data['type'] == 'withdrawal')]
+            self.data = self.data[(self.data['Type'] == 'deposit') |
+                                  (self.data['Type'] == 'withdrawal')]
             self.data['Currency'] = self.data['Currency'].str[1:]
             self.data['Currency'] = self.data['Currency'].str.replace('XBT', 'BTC')
             keep = ['Date',
                     'Currency',
                     'Amount',
                     'Fee',
-                    'type']
+                    'Type']
 
         self.data = self.data[keep]
 
         self.data['Date'] = pd.to_datetime(self.data['Date'], format='%Y-%m-%d %H:%M:%S')
 
     def _format_data(self):
-        pass
+        self.data['timestamp'] = self._timestamp()
+        self.data = self.data.rename(columns={'Fee': 'fee_amount',
+                                              'Date': 'datetime'})
+
+        if self.history == 'trade':
+            buy = []
+            sell = []
+            for _, row in self.data.iterrows():
+                base, quote = self._find_pair(row['Symbol'])
+                if row['Side'] == 'buy':
+                    buy.append(base)
+                    sell.append(quote)
+
+                else:
+                    buy.append(quote)
+                    sell.append(base)
+
+            self.data['buy_currency'] = buy
+            self.data['sell_currency'] = sell
+            self.data['buy_amount'] = np.where(self.data['Side'] == 'buy',
+                                               self.data['Amount'],
+                                               self.data['Total'])
+
+            self.data['sell_amount'] = np.where(self.data['Side'] == 'buy',
+                                                self.data['Total'],
+                                                self.data['Amount'])
+
+            self.data['type'] = np.where(self.data['Margin'] > 0,
+                                         'margin trade',
+                                         'trade')
+
+            self.data['fee_currency'] = 'USD'
+
+        elif self.history == 'transfer':
+            self.data['buy_currency'] = np.where(self.data['Type'] == 'deposit',
+                                                 self.data['Currency'],
+                                                 np.nan)
+            self.data['sell_currency'] = np.where(self.data['Type'] == 'withdrawal',
+                                                  self.data['Currency'],
+                                                  np.nan)
+            self.data['buy_amount'] = np.where(self.data['Type'] == 'deposit',
+                                               self.data['Amount'],
+                                               np.nan)
+            self.data['sell_amount'] = np.where(self.data['Type'] == 'withdrawal',
+                                                self.data['Amount'].abs(),
+                                                np.nan)
+
+            self.data['type'] = np.where(self.data['Type'] == 'deposit',
+                                         'deposit',
+                                         'withdrawal')
+
+            self.data['fee_currency'] = self.data['sell_currency']
+
+        self.data['exchange'] = 'kraken'
+        out = ['datetime',
+               'timestamp',
+               'type',
+               'buy_amount',
+               'buy_currency',
+               'sell_amount',
+               'sell_currency',
+               'fee_amount',
+               'fee_currency',
+               'exchange']
+
+        self.out_frame = self.data[out]
 
 
 class Poloniex(Exchange):
@@ -551,11 +619,9 @@ class Poloniex(Exchange):
             self.data['buy_amount'] = np.where(self.data['Side'] == 'buy',
                                                self.data[quote_amount],
                                                self.data[base_amount])
-
             self.data['sell_amount'] = np.where(self.data['Side'] == 'buy',
                                                 self.data[base_amount].abs(),
                                                 self.data[quote_amount].abs())
-
             self.data['fee_amount'] = np.where(self.data['Side'] == 'buy',
                                                self.data['Amount'] * self.data['Fee'],
                                                self.data['Total'] * self.data['Fee'])
