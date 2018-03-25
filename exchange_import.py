@@ -3,7 +3,7 @@ import numpy as np
 import datetime as dt
 from tools import Cryptocompare
 import itertools
-# import sqlite3
+import sqlite3
 
 
 '''Still a lot of repeated code. Preformat with all lowercase and absolute values.'''
@@ -60,7 +60,7 @@ class Exchange():
 
 class Gemini(Exchange):
     def __init__(self, file_name):
-        super().__init__(file_name)
+        super().__init__('gemini/{}'.format(file_name))
         self._load_xl()
         self._read_file()
         self._format_data()
@@ -148,7 +148,7 @@ class Gemini(Exchange):
 
 class Binance(Exchange):
     def __init__(self, file_name, history='trade'):
-        super().__init__(file_name)
+        super().__init__('binance/{}'.format(file_name))
         self.history = history
         self._load_xl()
         # if history == 'trade':
@@ -234,7 +234,7 @@ class Binance(Exchange):
 
 class Kucoin(Exchange):
     def __init__(self, file_name, history='trade'):
-        super().__init__(file_name)
+        super().__init__('kucoin/{}'.format(file_name))
         self.history = history
         self._load_csv()
         self._format_data()
@@ -302,7 +302,7 @@ class Kucoin(Exchange):
 
 class Cryptopia(Exchange):
     def __init__(self, file_name, history='trade'):
-        super().__init__(file_name)
+        super().__init__('cryptopia/{}'.format(file_name))
         self.history = history
         self._load_csv()
         self._format_data()
@@ -373,7 +373,7 @@ class Cryptopia(Exchange):
 
 class Hitbtc(Exchange):
     def __init__(self, file_name, history='trade'):
-        super().__init__(file_name)
+        super().__init__('hitbtc/{}'.format(file_name))
         self.history = history
         self._load_csv()
         self._format_data()
@@ -405,8 +405,8 @@ class Hitbtc(Exchange):
                                                self.data['Total'])
 
             self.data['sell_amount'] = np.where(self.data['Side'] == 'buy',
-                                                self.data['Total'],
-                                                self.data['Quantity'])
+                                                self.data['Total'].abs(),
+                                                self.data['Quantity'].abs())
 
             self.data = self.data.rename(columns={'Fee': 'fee_amount',
                                                   'Side': 'side'})
@@ -425,7 +425,7 @@ class Hitbtc(Exchange):
                                                self.data['Amount'],
                                                np.nan)
             self.data['sell_amount'] = np.where(self.data['Type'] == 'Withdrawal',
-                                                self.data['Amount'],
+                                                self.data['Amount'].abs(),
                                                 np.nan)
             self.data['fee_currency'] = np.nan
             self.data['fee_amount'] = np.nan
@@ -448,7 +448,7 @@ class Hitbtc(Exchange):
 
 class Kraken(Exchange):
     def __init__(self, file_name, history='trade'):
-        super().__init__(file_name)
+        super().__init__('kraken/{}'.format(file_name))
         self.history = history
         self._load_csv()
         self.headers = {'time': 'Date',
@@ -569,7 +569,7 @@ class Kraken(Exchange):
 class Poloniex(Exchange):
     '''May need to add in borrowing history'''
     def __init__(self, file_name, history='trade'):
-        super().__init__(file_name)
+        super().__init__('poloniex/{}'.format(file_name))
         self.history = history
         self._load_csv()
         self._read_file()
@@ -660,5 +660,28 @@ class Poloniex(Exchange):
 
         self.out_frame = self.data[out]
 
-# db = sqlite3.connect('data/crypto.db')
+
+if __name__ == '__main__':
+    frames = [Gemini('transaction_history.xlsx').out_frame,
+              Binance('TradeHistory.xlsx').out_frame,
+              Binance('DepositHistory.csv', history='deposit').out_frame,
+              Binance('WithdrawalHistory.csv', history='withdrawal').out_frame,
+              Kucoin('kucoin_trades.csv').out_frame,
+              Cryptopia('Trade_History.csv').out_frame,
+              Cryptopia('Deposit_History.csv', history='deposit').out_frame,
+              Cryptopia('Withdraw_History.csv', history='withdrawal').out_frame,
+              Hitbtc('trades.csv').out_frame,
+              Hitbtc('payment_history.csv', history='transfer').out_frame,
+              Kraken('trades.csv').out_frame,
+              Kraken('ledgers.csv', history='transfer').out_frame,
+              Poloniex('tradeHistory.csv').out_frame,
+              Poloniex('depositHistory.csv', history='deposit').out_frame,
+              Poloniex('withdrawalHistory.csv', history='withdrawal').out_frame]
+
+    db = sqlite3.connect('data/crypto.db')
+    for frame in frames:
+        frame.to_sql('transactions', db, if_exists='append', index=False)
+        # print(frame.head())
+
+
 # out_frame.to_sql('transactions', db, if_exists='append', index=False)
