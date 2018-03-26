@@ -661,6 +661,25 @@ class Poloniex(Exchange):
         self.out_frame = self.data[out]
 
 
+def round_ts(ts, seconds=3600, up=True):
+    return ts // seconds * seconds + seconds * up
+
+
+def linear_int(x, x0, y0, x1, y1):
+    return y0 + (x - x0) * ((y1 - y0) / (x1 - x0))
+
+
+def basis(f_currency, t_currency, ts):
+    cc = Cryptocompare()
+    t_start = round_ts(ts, up=False)
+    t_end = round_ts(ts)
+    data = cc.hourly(f_currency, t_currency, t_end, 1)
+    o_price = data[-1]['open']
+    c_price = data[-1]['close']
+
+    return linear_int(ts, t_start, o_price, t_end, c_price)
+
+
 if __name__ == '__main__':
     frames = [Gemini('transaction_history.xlsx').out_frame,
               Binance('TradeHistory.xlsx').out_frame,
