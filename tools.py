@@ -18,15 +18,26 @@ class Cryptocompare:
 
         return r.json()['Data']
 
-    def daily(self, symbol, date, n):
+    def daily(self,f_currency, t_currency, ts, n):
         url = '{}histoday'.format(self.base_url)
-        pattern = '%Y-%m-%d'
-        toTs = int(time.mktime(time.strptime(date, pattern)))
-        payload = {'fsym': symbol,
-                   'tsym': 'USD',
+        # pattern = '%Y-%m-%d'
+        # toTs = int(time.mktime(time.strptime(date, pattern)))
+        payload = {'fsym': f_currency,
+                   'tsym': t_currency,
                    'limit': n - 1,
-                   'toTs': toTs
+                   'toTs': ts
                    }
+        r = requests.get(url, params=payload)
+
+        return r.json()['Data']
+
+    def hourly(self, f_currency, t_currency, ts, n):
+        url = '{}histohour'.format(self.base_url)
+        payload = {'fsym': f_currency,
+                   'tsym': t_currency,
+                   'limit': n - 1,
+                   'toTs': ts
+                  }
         r = requests.get(url, params=payload)
 
         return r.json()['Data']
