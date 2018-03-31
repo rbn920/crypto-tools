@@ -679,6 +679,13 @@ def basis(f_currency, t_currency, ts):
 
     return linear_int(ts, t_start, o_price, t_end, c_price)
 
+def basis_frame(currency, side):
+for index, row in df.iterrows():
+    if (row.buy_currency != ('USD' or 'BTC')):
+        if row.buy_currency:
+            df.loc[df.index[index], 'buy_usd'] = basis(row.buy_currency, 'USD',
+                                                       row.timestamp)
+
 
 if __name__ == '__main__':
     frames = [Gemini('transaction_history.xlsx').out_frame,
