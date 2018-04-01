@@ -681,12 +681,31 @@ def basis(f_currency, t_currency, ts):
 
     return linear_int(ts, t_start, o_price, t_end, c_price)
 
-def basis_frame(currency, side):
-for index, row in df.iterrows():
-    if (row.buy_currency != ('USD' or 'BTC')):
+
+def basis_frame(df):
+    for index, row in df.iterrows():
         if row.buy_currency:
-            df.loc[df.index[index], 'buy_usd'] = basis(row.buy_currency, 'USD',
-                                                       row.timestamp)
+            if row.buy_currency == 'USD':
+                df.loc[df.index[index], 'buy_usd'] = row.buy_amount
+            else:
+                df.loc[df.index[index], 'buy_usd'] = basis(row.buy_currency, 'USD',
+                                                           row.timestamp)
+            if row.buy_currency == 'BTC':
+                df.loc[df.index[index], 'buy_btc'] = row.buy_amount
+            else:
+                df.loc[df.index[index], 'buy_btc'] = basis(row.buy_currency, 'BTC',
+                                                           row.timestamp)
+        if row.sell_currency:
+            if row.sell_currency == 'USD':
+                df.loc[df.index[index], 'sell_usd'] = row.sell_amount
+            else:
+                df.loc[df.index[index], 'sell_usd'] = basis(row.sell_currency, 'USD',
+                                                            row.timestamp)
+            if row.sell_currency == 'BTC':
+                df.loc[df.index[index], 'sell_btc'] = row.sell_amount
+            else:
+                df.loc[df.index[index], 'sell_btc'] = basis(row.sell_currency, 'BTC',
+                                                            row.timestamp)
 
 
 if __name__ == '__main__':
@@ -710,6 +729,3 @@ if __name__ == '__main__':
     for frame in frames:
         frame.to_sql('transactions', db, if_exists='append', index=False)
         # print(frame.head())
-
-
-# out_frame.to_sql('transactions', db, if_exists='append', index=False)
