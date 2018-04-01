@@ -495,6 +495,8 @@ class Kraken(Exchange):
 
         self.data = self.data[keep]
 
+        self.data['Date'] = self.data['Date'].str.replace('T', ' ')
+        self.data['Date'] = self.data['Date'].str.replace('Z', '')
         self.data['Date'] = pd.to_datetime(self.data['Date'], format='%Y-%m-%d %H:%M:%S')
 
     def _format_data(self):
