@@ -286,6 +286,8 @@ class Kucoin(Exchange):
         self.data = self.data.rename(columns={'fee.cost': 'fee_amount',
                                               'fee.currency': 'fee_currency'})
         self.data['exchange'] = 'kucoin'
+        self.data['datetime'] = self.data['datetime'].str.replace('T', ' ')
+        self.data['datetime'] = self.data['datetime'].str.replace('Z', '')
         out = ['datetime',
                'timestamp',
                'type',
@@ -495,8 +497,6 @@ class Kraken(Exchange):
 
         self.data = self.data[keep]
 
-        self.data['Date'] = self.data['Date'].str.replace('T', ' ')
-        self.data['Date'] = self.data['Date'].str.replace('Z', '')
         self.data['Date'] = pd.to_datetime(self.data['Date'], format='%Y-%m-%d %H:%M:%S')
 
     def _format_data(self):
